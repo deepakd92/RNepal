@@ -1,0 +1,180 @@
+The data visualisation of Nepal
+========================================================
+
+Back in my high school, i had studied that Illiteracy is one of the major causes of Population increase. In this project, i have collected datas of Nepal to see if what i had learned in my Social Science class was really happening or not. Here is my observation:
+
+
+
+```{r}
+install.packages('raster',repos="http://cran.rstudio.com/")
+install.packages('maptools',repos="http://cran.rstudio.com/")
+install.packages('ggplot2',repos="http://cran.rstudio.com/")
+
+
+library(maptools)
+gpclibPermit()
+library(raster)
+library(ggplot2)
+
+adm <- getData('GADM', country='Nepal', level=3)
+c<-fortify(adm,region="NAME_3")
+```
+
+```{r}
+pop<-read.csv('http://data.opennepal.net/sites/default/files/resources/District%20wise%20Population%20Land%20Ratio%20and%20Population%20Density_0.csv')
+num<-seq(5,dim(pop)[1],7)
+pop1<-pop[num,]
+quanta<-quantile(pop1$Value,c(0.0,.25,.50,.75,1.0))
+pop1$quan<-0
+pop1$quan[pop1$Value>=quanta[1]&pop1$Value<quanta[2]]<-"least"
+pop1$quan[pop1$Value>=quanta[2]&pop1$Value<quanta[3]]<-"medium"
+pop1$quan[pop1$Value>=quanta[3]&pop1$Value<quanta[4]]<-"high"
+pop1$quan[pop1$Value>=quanta[4]]<-"most"
+```
+**Districts with Least Population**
+```{r}
+as.character(pop1[pop1$quan=="least",1])
+```
+**Districts with Medium Population**
+```{r}
+as.character(pop1[pop1$quan=="medium",1])
+```
+**Districts with High Population**
+```{r}
+as.character(pop1[pop1$quan=="high",1])
+```
+**Districts with  Most Population**
+```{r}
+as.character(pop1[pop1$quan=="most",1])
+```
+```{r}
+topd<-NULL
+topd<-pop1[pop1$Value==max(pop1$Value),]
+top<-pop1$Value[order(pop1$Value,decreasing=T)][1:10]
+for (i in top){
+  topd<-rbind(topd,pop1[which(pop1$Value==i),])
+} 
+topd<-topd[-1,]
+```
+
+```{r}
+literacy<-read.csv('http://data.opennepal.net/sites/default/files/resources/Literacy%20rate%20status%20by%20age%20group%2015%20-%2024.csv')
+lrate<-aggregate(Value~District+Sub.Group,data=literacy,mean)
+literacyrate<-function(v){
+  lr<-v$Value[1:75]/v$Value[76:150]
+  v<-cbind(v,lr)
+}
+lrate<-literacyrate(lrate)
+lrate1<-lrate[1:75,]
+
+lrate1$Value<-NULL
+lrate1$Sub.Group<-NULL
+
+topd$District<-gsub(" ","",topd$District)
+lrate1$District<-gsub("sunsari","Sunsari",lrate1$District)
+lrate1$District<-gsub("Kathmanduu","Kathmandu",lrate1$District)
+
+combined<-merge(topd,lrate1,by.x="District",by.y="District",all.x=TRUE)
+
+```
+
+
+```{r fig.width=20, fig.height=16}
+pop1$quan<-factor(pop1$quan,levels=c("least","medium","high","most"))
+ ggplot()+geom_bar(data=pop1,aes(x=District,y=Value,fill=factor(quan)),stat='identity')+facet_wrap(~quan,scales='free',ncol=1)+labs(title = "Districts Categorised as per the Popualtion",size=4.5)
+```
+ * Below is the map of Nepal showing the Population Distribution in its 75 districts.*
+```{r fig.width=18, fig.height=10}
+pop1$District<-gsub(" ","",pop1$District)
+pop1$District<-as.factor(pop1$District)
+ggplot(pop1, aes(map_id = District)) + geom_map(aes(fill = Value), map = c) + expand_limits(x = c$long, y = c$lat)+labs(title = "Population Distribution in Districts",size=4.5)
+
+```
+ * Below is the map of Nepal showing the literacy rate in its 75 districts*
+```{r fig.width=18,fig.height=10}
+namesInMap <- levels(factor(c$id))
+namesInData<-levels(as.factor(lrate1$District))
+levels(lrate1$District) <- levels(factor(c$id))
+lrate1$District<-levels(lrate1$District)
+lrate1$District<-as.factor(lrate1$District)
+ggplot(lrate1, aes(map_id = District)) + geom_map(aes(fill = lr), map = c) + expand_limits(x = c$long, y = c$lat)+labs(title = "Literacy Rate in Districts",size=4.5)
+```
+
+```{r fig.width=18, fig.height=10}
+ggplot(pop1, aes(map_id = District)) + geom_map(aes(fill = factor(quan)), map = c) + expand_limits(x = c$long, y = c$lat)+labs(title = "Population in 75 Districts",size=4.5)+scale_fill_discrete(breaks=c("most","high","medium","least"))
+quanta<-quantile(lrate$lr,c(0.0,.25,.50,.75,1.0))
+ lrate1$quan2<-0
+
+ lrate1$quan2[lrate1$lr>=quanta[1]&lrate1$lr<quanta[2]]<-"least"
+ lrate1$quan2[lrate1$lr>=quanta[2]&lrate1$lr<quanta[3]]<-"medium"
+ lrate1$quan2[lrate1$lr>=quanta[3]&lrate1$lr<quanta[4]]<-"high"
+ lrate1$quan2[lrate1$lr>=quanta[4]]<-"most"
+ggplot(lrate1, aes(map_id = District)) + geom_map(aes(fill = factor(quan2)), map = c) + expand_limits(x = c$long, y = c$lat)+labs(title = "Literacy Rate in 75 Districts",size=4.5)+scale_fill_discrete(breaks=c("most","high","medium","least"))
+```
+
+ Oberving closely the Population Distribution map, we can see that Population is higher in Southern Districts of Nepal. And from the Literacy Distribution Map, we can see that the litreracy rate is lower in the Southern Districts of Nepal. So far my social science knowledge made sense. However i noticed something strage in the Kathmandu District(the capital)-it is marked by the lightest blue color in Population Distribution Map 1 (i.e the complete blue color map). Kathmandu District had most population but also the highest Literacy Rate. So i did not reach to a conclusion then.Apart from the kathmandu, there is also a difference in the top left corner of the map, in that corner it suggests that literacy is directly proportional to the population.
+Stage 2: I plotted the top 10 most Populated Districts of Nepal,and i saw that the the literacy rate of Kathmandu differed from the 10th Most Populated District by  almost 50%. If i took Kathmandu out of my data, then all other results do support that Illiteracy is one of the causes of Population Increase. So i considered Kathmandu as an outlier. And it does make sense for Kathmandu to be considered as an outlier as most people migrate to Kathmandu for jobs,facilities,education. So the district Kathmandu does not actually represent its own data but also the data because of migration. Since more skilled people migrate to Kathmandu, the literacy rate of Kathmandu is higher and so is the population. 
+
+```{r fig.width=16, fig.height=10}
+combined5<-merge(pop1,lrate1,by.x="District",by.y="District",all=TRUE)
+combined7<- combined5[combined5$quan=="most",]
+combined6<-combined5[combined5$quan=="least",]
+ ggplot()+geom_bar(data=combined6,aes(x=District,y=Value,fill=factor(quan2)),stat="identity")+labs(title = "Population and Literacy Relationship for Least Populated Districts of Nepal",size=4.5)+scale_fill_discrete(breaks=c("most","high","medium","least"))
+ggplot()+geom_bar(data=combined7,aes(x=District,y=Value,fill=factor(quan2)),stat="identity")+ labs(title = "Population and Literacy Relationship for Most Populated Districts of Nepal",size=4.5)+scale_fill_discrete(breaks=c("most","high","medium","least"))
+```
+
+
+```{r}
+tourist<-read.csv('http://data.opennepal.net/sites/default/files/resources/Tourist%20Arrival%20by%20month.csv',stringsAsFactors=FALSE)
+colnames(tourist)<-c("Year","Month","Number")
+tourist$Number<-as.numeric(gsub(",","",tourist$Number))
+tourist1<-aggregate(Number~Month,data=tourist,FUN=mean)
+```
+```{r}
+weather<-read.csv('http://data.opennepal.net/sites/default/files/resources/Weather%20data%20of%20Nepal%20for%20the%20year%202012-2013.csv',stringsAsFactors=F)
+colnames(weather)<-c("Date","Stations","Max","Min","Rainfall")
+rownames(weather)<-1:dim(weather)[1]
+weather$Min<-(gsub(",","",weather$Min))
+weather$Max<-(gsub(",","",weather$Max))
+weather<-weather[!weather$Min=='',]
+weather<-weather[!weather$Max=='',]
+weather$Min<-as.numeric(weather$Min)
+weather$Max<-as.numeric(weather$Max)
+weather<-na.omit(weather)
+weather$Average<-(weather$Min+weather$Max)/2
+
+
+Jan<-weather[which(as.character(weather$Date)=="2012/1/1")[1]:max(which(as.character(weather$Date)=="2012/1/31")),]
+Feb<-weather[which(as.character(weather$Date)=="2012/2/1")[1]:max(which(as.character(weather$Date)=="2012/2/29")),]
+Mar<-weather[which(as.character(weather$Date)=="2012/3/1")[1]:max(which(as.character(weather$Date)=="2012/3/31")),]
+Apr<-weather[which(as.character(weather$Date)=="2012/4/1")[1]:max(which(as.character(weather$Date)=="2012/4/30")),]
+May<-weather[which(as.character(weather$Date)=="2012/5/1")[1]:max(which(as.character(weather$Date)=="2012/5/31")),]
+June<-weather[which(as.character(weather$Date)=="2012/6/1")[1]:max(which(as.character(weather$Date)=="2012/6/30")),]
+July<-weather[which(as.character(weather$Date)=="2012/7/1")[1]:max(which(as.character(weather$Date)=="2012/7/31")),]
+Aug<-weather[which(as.character(weather$Date)=="2012/8/1")[1]:max(which(as.character(weather$Date)=="2012/8/31")),]
+Sep<-weather[which(as.character(weather$Date)=="2012/9/1")[1]:max(which(as.character(weather$Date)=="2012/9/30")),]
+Oct<-weather[which(as.character(weather$Date)=="2012/10/1")[1]:max(which(as.character(weather$Date)=="2012/10/31")),]
+Nov<-weather[which(as.character(weather$Date)=="2012/11/1")[1]:max(which(as.character(weather$Date)=="2012/11/30")),]
+Dec<-weather[which(as.character(weather$Date)=="2012/12/1")[1]:max(which(as.character(weather$Date)=="2012/12/31")),]
+v<-c("Jan" ,"Feb", "Mar","Apr", "May","June", "July", "Aug", "Sep", "Oct", "Nov", "Dec")
+temp<-c()
+for (i in v){
+  average<-(mean(get(i)$Average))
+  temp<-append(temp,average)
+}
+Monthtemp<-data.frame(Month=v,temp)
+tourist1$Month<-c("Apr","Aug","Dec","Feb","Jan","July","June","Mar","May","Nov","Oct","Sep")
+touristtemp<-merge(Monthtemp,tourist1,by.x="Month",by.y="Month",all.x=TRUE)
+touristtemp$temp<-round(touristtemp$temp,2)
+```
+ Although completely different, I also wanted to see if the tourists who come to Nepal may consider weather as a factor. Here is the plot showing Number of Tourists who visit Nepal in Particular Months. Also remember that in Nepal, Celsius is used to represent Temperature. From the data, a smart conclusion would be Tourists indeed consider weather as a factor. See the "October bar", it is when maximum tourists come and the temp is 21.98 which is the most suitable temperature in Nepal.See the "June" and "May" bar, they represent the least number of tourists. The correspoding temperature is 11.22 and 27.64 which are both extreme temperatures. So tourists want to visit Nepal when the temperature is most appropriate (i.e October) is my smart conclusion. Thankyou!
+```{r fig.width=13, fig.height=8}
+ggplot(data=touristtemp,aes(x=Month,y=Number,group=1,fill=factor(temp)))+geom_bar(stat="identity")+labs(title = "Relationship between Tourists and Weather",size=5)
+
+```
+
+
+ 
+ 
+
+
